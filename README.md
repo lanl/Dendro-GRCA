@@ -2,6 +2,8 @@
 
 # Dendro-GRCA 
 
+![intro_img](docs/bbh-q10-4.png)
+
 "Dendro" in Greek language means tree. The Dendro library is a large scale (262K cores on ORNL's Titan) 
 distributed memory adaptive octree framework. The main goal of Dendro is to perform large scale multiphysics simulations 
 efficeiently in mordern supercomputers. Dendro consists of efficient parallel data structures and algorithms to perform 
