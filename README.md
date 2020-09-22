@@ -1,6 +1,6 @@
 # WIP : Code will be added after all tests are done
 
-# Dendro-GRCA ?
+# Dendro-GRCA 
 
 "Dendro" in Greek language means tree. The Dendro library is a large scale (262K cores on ORNL's Titan) 
 distributed memory adaptive octree framework. The main goal of Dendro is to perform large scale multiphysics simulations 
@@ -14,7 +14,7 @@ in University of Utah and Brigham Young University.
 This is a LANL disclosure version from open Dendro repository. 
 You can find detailed information about this in [Dendro-5.01](https://github.com/paralab/Dendro-5.01)
 
-## Build Dendro 
+## How to build Dendro?
 
 Dendro can be installed anywhere in your system but we suggest
 that all repositories are downloaded in DENDRO root directory 
@@ -60,7 +60,7 @@ building code unless you want to generate RHS during compile time)
 Clone the master branch from the Dendro-5.01 git repo:
 ```{engine=sh}
    cd $HOME/DENDRO
-   git clone https://github.com/hlim88/Dendro-5.01.git
+   git clone git@github.com:lanl/Dendro-GRCA.git
 ```    
 
 After cloning the repo, follow the configure command:
