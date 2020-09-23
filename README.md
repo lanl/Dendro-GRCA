@@ -1,5 +1,3 @@
-# WIP : Code will be added after all tests are done
-
 # Dendro-GRCA 
 <p align="center">
 <img src="docs/bbh-q10-4.png" height="480" width="640" >
