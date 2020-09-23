@@ -28,7 +28,7 @@ We recommend to have following directory structure:
 
 ```{engine=sh}
   ${HOME}/DENDRO
-  ├── Dendro-5.01
+  ├── Dendro-GRCA
   │   └── build
   └── local
       ├── bin
@@ -59,7 +59,7 @@ building code unless you want to generate RHS during compile time)
 
 #### Building Dendro
 
-Clone the master branch from the Dendro-5.01 git repo:
+Clone the master branch from the Dendro-GRCA git repo:
 ```{engine=sh}
    cd $HOME/DENDRO
    git clone git@github.com:lanl/Dendro-GRCA.git
@@ -68,7 +68,7 @@ Clone the master branch from the Dendro-5.01 git repo:
 After cloning the repo, follow the configure command:
 (copy and paste below into your temrinal)
 ```{engine=sh}
-   cd Dendor-5.01 ;
+   cd Dendor-GRCA ;
    mkdir build ; cd build
    export CMAKE_PREFIX_PATH=${HOME}/DENDRO/local
    cmake .. \
@@ -106,7 +106,7 @@ Once your configuration is successful, you will see
 ```{engine=sh}
 -- Configuring done
 -- Generating done
--- Build files have been written to: ${HOME}/DENDRO/Dendro-5.01/build
+-- Build files have been written to: ${HOME}/DENDRO/Dendro-GRCA/build
 ```
 at the end of configuration.
 

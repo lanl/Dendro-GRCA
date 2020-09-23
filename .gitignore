@@ -1,0 +1,8 @@
+*.pdf
+build*
+bld*
+*.o
+*.aux
+*.log
+*.swp
+__pycache__
