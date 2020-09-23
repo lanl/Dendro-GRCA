@@ -146,6 +146,9 @@ create your own parameter file based on this
 If you are interested in learning details about this toolkit, 
 please check the [publication](https://epubs.siam.org/doi/10.1137/18M1196972)
 
+## Visualization
+We are using Paravies as our visualization toolkit with parallel vtu output. 
+
 ## Contact
 Please contact Hyun Lim via hyunlim@lanl.gov if you have any
 questions or problem.

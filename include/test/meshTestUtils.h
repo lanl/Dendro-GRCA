@@ -1,8 +1,4 @@
-//
-// Created by milinda on 9/25/17.
 /**
-*@author Milinda Fernando
-*School of Computing, University of Utah
 *@brief Contains the test utilities for the mesh class.
 */
 //
@@ -14,7 +10,7 @@
 #include <iostream>
 #include <functional>
 #include "daUtils.h"
-#include "../../BSSN_GR/include/lebedev.h"
+#include "../../MassGrav/include/lebedev.h"
 
 
 

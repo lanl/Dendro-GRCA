@@ -6,3 +6,5 @@ bld*
 *.log
 *.swp
 __pycache__
+CMakeCache*
+CMakeFiles
