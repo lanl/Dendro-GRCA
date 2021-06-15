@@ -1,9 +1,7 @@
 ####################################################################
-# May.8.2018
-# Adding gamma driver into shift equation to optimize BBH behavior
-# with large mass ratio
+# Jun.2021
+# Evolution equations for quadratic gravity
 #####################################################################
-
 
 import dendro
 from sympy import *
