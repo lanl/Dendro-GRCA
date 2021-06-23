@@ -3,7 +3,8 @@
 # Date : Dec.12.2017
 # Updated : May.18.2018 
 # Python script that generates Psi4 for gravitational waves and
-# the momentum and Hamiltonian constraint equations. 
+# the momentum and Hamiltonian constraint equations.
+# TODO : Add QG constraints too
 # 
 ####################################################################
 
