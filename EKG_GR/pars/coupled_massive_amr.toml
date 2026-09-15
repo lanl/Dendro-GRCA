@@ -1,17 +1,17 @@
 # Native BSSN parser, field count 26. See README for required CMake choices.
 BSSN_IO_OUTPUT_FREQ = 10
 BSSN_TIME_STEP_OUTPUT_FREQ = 5
-BSSN_REMESH_TEST_FREQ = 0
-BSSN_REMESH_TEST_FREQ_AFTER_MERGER = 0
+BSSN_REMESH_TEST_FREQ = 5
+BSSN_REMESH_TEST_FREQ_AFTER_MERGER = 5
 BSSN_CHECKPT_FREQ = 0
-BSSN_VTU_FILE_PREFIX = "runs/flat_massive_plane/vtu/ekg"
-BSSN_CHKPT_FILE_PREFIX = "runs/flat_massive_plane/checkpoint/ekg"
-BSSN_PROFILE_FILE_PREFIX = "runs/flat_massive_plane/profile/ekg"
-DENDRO_LOG_FILE = "runs/flat_massive_plane/log/ekg"
+BSSN_VTU_FILE_PREFIX = "runs/coupled_massive_amr/vtu/ekg"
+BSSN_CHKPT_FILE_PREFIX = "runs/coupled_massive_amr/checkpoint/ekg"
+BSSN_PROFILE_FILE_PREFIX = "runs/coupled_massive_amr/profile/ekg"
+DENDRO_LOG_FILE = "runs/coupled_massive_amr/log/ekg"
 BSSN_RESTORE_SOLVER = 0
-BSSN_ID_TYPE = 101
-BSSN_ENABLE_BLOCK_ADAPTIVITY = 1
-BSSN_MAXDEPTH = 5
+BSSN_ID_TYPE = 103
+BSSN_ENABLE_BLOCK_ADAPTIVITY = 0
+BSSN_MAXDEPTH = 6
 BSSN_ELE_ORDER = 6
 BSSN_GRID_MIN_X = -16.0
 BSSN_GRID_MIN_Y = -16.0
@@ -42,15 +42,15 @@ ETA_DAMPING = 1.0
 ETA_DAMPING_EXP = 1.0
 CHI_FLOOR = 1.0e-8
 BSSN_TRK0 = 0.0
-KO_DISS_SIGMA = 0.0
+KO_DISS_SIGMA = 0.02
 BSSN_ETA_R0 = 1.31
 BSSN_LAMBDA = [1,1,1,1]
 BSSN_LAMBDA_F = [1.0,0.0]
 BSSN_ETA_POWER = [2.0,2.0]
 BSSN_XI = [1,1,1]
 BSSN_USE_WAVELET_TOL_FUNCTION = 0
-BSSN_WAVELET_TOL = 1.0e-7
-BSSN_WAVELET_TOL_MAX = 1.0e-7
+BSSN_WAVELET_TOL = 2.0e-6
+BSSN_WAVELET_TOL_MAX = 2.0e-6
 BSSN_WAVELET_TOL_FUNCTION_R0 = 1.0
 BSSN_WAVELET_TOL_FUNCTION_R1 = 12.0
 BSSN_REFINEMENT_MODE = 0
@@ -123,17 +123,17 @@ Z = 0.0
 
 
 [EKG]
-mu = 0.4
+mu = 0.2
 fa = 1.0
-amplitude = 1.0e-3
+amplitude = 0.02
 width = 2.0
 support_radius = 8.0
 center = [0.0,0.0,0.0]
 wavevector = [0.5,0.25,0.0]
 phi0 = 0.0
 pi0 = 0.05
-boundary = "analytic"
-scalar_ko = 0.0
+boundary = "sommerfeld"
+scalar_ko = 0.02
 # These fixed scales affect WAMR input views only, not physical fields.
 refine_scale_phi = 1.0
 refine_scale_pi = 1.0

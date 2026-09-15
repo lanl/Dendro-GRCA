@@ -1,19 +1,16 @@
-# Full parameter file for the reviewed experimental parser plus NEW [EKS].
-# ID100: exact massless radial Gaussian on frozen Minkowski.
+# Native BSSN parser, field count 26. See README for required CMake choices.
 BSSN_IO_OUTPUT_FREQ = 10
 BSSN_TIME_STEP_OUTPUT_FREQ = 5
 BSSN_REMESH_TEST_FREQ = 0
 BSSN_REMESH_TEST_FREQ_AFTER_MERGER = 0
 BSSN_CHECKPT_FREQ = 0
-BSSN_VTU_FILE_PREFIX = "runs/gaussian/vtu/eks"
-BSSN_CHKPT_FILE_PREFIX = "runs/gaussian/checkpoint/eks"
-BSSN_PROFILE_FILE_PREFIX = "runs/gaussian/profile/eks"
-DENDRO_LOG_FILE = "runs/gaussian/log/eks"
+BSSN_VTU_FILE_PREFIX = "runs/flrw_coupled/vtu/ekg"
+BSSN_CHKPT_FILE_PREFIX = "runs/flrw_coupled/checkpoint/ekg"
+BSSN_PROFILE_FILE_PREFIX = "runs/flrw_coupled/profile/ekg"
+DENDRO_LOG_FILE = "runs/flrw_coupled/log/ekg"
 BSSN_RESTORE_SOLVER = 0
-BSSN_ID_TYPE = 100
+BSSN_ID_TYPE = 102
 BSSN_ENABLE_BLOCK_ADAPTIVITY = 1
-# The reviewed main uses regular level MAXDEPTH-2 for this path.
-# With MAXDEPTH=5 and ELE_ORDER=6: level=3, dx=32/(8*6)=2/3.
 BSSN_MAXDEPTH = 5
 BSSN_ELE_ORDER = 6
 BSSN_GRID_MIN_X = -16.0
@@ -22,7 +19,6 @@ BSSN_GRID_MIN_Z = -16.0
 BSSN_GRID_MAX_X = 16.0
 BSSN_GRID_MAX_Y = 16.0
 BSSN_GRID_MAX_Z = 16.0
-# Full-domain regular octree; NOT a small box cut out of the domain.
 BSSN_BLK_MIN_X = -16.0
 BSSN_BLK_MIN_Y = -16.0
 BSSN_BLK_MIN_Z = -16.0
@@ -38,7 +34,6 @@ BSSN_RK_TIME_END = 4.0
 BSSN_RK_TYPE = 1
 BSSN_RK45_TIME_STEP_SIZE = 0.05
 BSSN_RK45_DESIRED_TOL = 1.0e-10
-# Main computes actual dt from CFL and mesh spacing, not the value above.
 BSSN_CFL_FACTOR = 0.075
 BSSN_DIM = 3
 ETA_CONST = 2.0
@@ -59,16 +54,15 @@ BSSN_WAVELET_TOL_MAX = 1.0e-7
 BSSN_WAVELET_TOL_FUNCTION_R0 = 1.0
 BSSN_WAVELET_TOL_FUNCTION_R1 = 12.0
 BSSN_REFINEMENT_MODE = 0
-BSSN_NUM_REFINE_VARS = 2
-BSSN_REFINE_VARIABLE_INDICES = [24,25]
-BSSN_NUM_EVOL_VARS_VTU_OUTPUT = 4
-BSSN_VTU_OUTPUT_EVOL_INDICES = [0,1,24,25]
+BSSN_NUM_REFINE_VARS = 5
+BSSN_REFINE_VARIABLE_INDICES = [0,1,2,24,25]
+BSSN_NUM_EVOL_VARS_VTU_OUTPUT = 5
+BSSN_VTU_OUTPUT_EVOL_INDICES = [0,1,2,24,25]
 BSSN_NUM_CONST_VARS_VTU_OUTPUT = 4
 BSSN_VTU_OUTPUT_CONST_INDICES = [0,1,2,3]
 BSSN_VTU_Z_SLICE_ONLY = false
-BSSN_TERMINAL_OUTPUT_EVOL_INDICES = [24,25]
+BSSN_TERMINAL_OUTPUT_EVOL_INDICES = [0,1,2,24,25]
 BSSN_TERMINAL_OUTPUT_CONST_INDICES = [0,1,2,3]
-# Legacy-required TP/BH keys remain even though these tests create NO holes.
 TPID_TARGET_M_PLUS = 0.5
 TPID_TARGET_M_MINUS = 0.5
 TPID_PAR_B = 5.0
@@ -126,14 +120,24 @@ X = 0.0
 Y = 0.0
 Z = 0.0
 
-[EKS]
-mode = "frozen"
-boundary = "analytic"
+
+
+[EKG]
 mu = 0.0
 fa = 1.0
-amplitude = 1.0e-3
+amplitude = 0.0
 width = 2.0
+support_radius = 8.0
 center = [0.0,0.0,0.0]
 wavevector = [0.5,0.25,0.0]
-ko_sigma = 0.0
+phi0 = 0.0
+pi0 = 0.05
+boundary = "analytic"
+scalar_ko = 0.0
+# These fixed scales affect WAMR input views only, not physical fields.
+refine_scale_phi = 1.0
+refine_scale_pi = 1.0
+id_outer_radius = 24.0
+id_radial_points = 4096
+id_tolerance = 1.0e-12
 allow_constraint_violating_id = false

@@ -1,0 +1,6 @@
+generated/
+__pycache__/
+*.pyc
+build*/
+runs/
+ekg_adapter_fixture/

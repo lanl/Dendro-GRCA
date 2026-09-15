@@ -1,0 +1,7 @@
+#pragma once
+#cmakedefine01 EKG_BACKREACTION
+#cmakedefine01 EKG_FREEZE_GEOMETRY
+#cmakedefine01 EKG_FUSED_RHS
+#cmakedefine01 EKG_GAUGE_SYNCHRONOUS
+#cmakedefine01 EKG_POTENTIAL_AXION
+#cmakedefine01 EKG_ADVECTION_UPWIND

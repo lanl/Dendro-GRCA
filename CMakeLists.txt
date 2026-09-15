@@ -179,4 +179,5 @@ else()
 endif()
 
 add_subdirectory(BSSN_GR)
+add_subdirectory(EKG_GR)
 add_subdirectory(Fluid)

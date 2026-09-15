@@ -1,30 +1,162 @@
-# This is a SEPARATE recompilation of the application with 26 fields.
-# Do not link the original 24-field bssn_common object library.
-if(WITH_CUDA OR DENDRO_USE_NEW_DERIVS)
-  message(FATAL_ERROR "EKS starter: use CPU and legacy explicit derivatives")
+# Native BSSN application + generated canonical scalar equations.
+# The sibling BSSN_GR directory and its targets are NEVER modified.
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  cmake_minimum_required(VERSION 3.19)
+  project(EKGAlgebraTests LANGUAGES CXX)
+  set(_solver_default OFF)
+else()
+  set(_solver_default ON)
 endif()
-set(EKS_SRC
-  src/parameters.cpp src/grUtils.cpp src/rhs.cpp src/sommerfeld_bcs.cpp
-  src/derivs.cpp src/physcon.cpp src/profile_params.cpp src/bssn_constraints.cpp
-  src/TPCoordTransf.cpp src/TPEquations.cpp src/TPFuncAndJacobian.cpp
-  src/TPNewton.cpp src/TPUtilities.cpp src/TwoPunctures.cpp src/dataUtils.cpp
-  src/hadrhs.F90 src/trumpet.cpp src/eks_config.cpp)
-add_library(eks_common OBJECT ${EKS_SRC})
-target_include_directories(eks_common PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/scripts ${CMAKE_CURRENT_SOURCE_DIR}/gencode)
-if(DEFINED CHECK_GIT_INCLUDE_PATH)
-  target_include_directories(eks_common PUBLIC ${CHECK_GIT_INCLUDE_PATH})
+option(EKG_BUILD_SOLVER "Build ekgSolver using the native BSSN application" ${_solver_default})
+option(EKG_BUILD_TESTS "Build generated-kernel and initial-data tests" ON)
+option(EKG_BACKREACTION "Evolve the fully coupled Einstein-scalar system" ON)
+option(EKG_FREEZE_GEOMETRY "Test fields on fixed geometry (requires backreaction OFF)" OFF)
+option(EKG_FUSED_RHS "One global-CSE GR+matter kernel; OFF uses separately generated vacuum and matter kernels" ON)
+option(EKG_REGENERATE "Generate kernels with the selected Python/DendroSym" ON)
+option(EKG_REFERENCE_EMITTER "TESTS ONLY: allow standalone SymPy-reference emission" OFF)
+set(EKG_POTENTIAL "massive" CACHE STRING "massive or axion")
+set(EKG_GAUGE "puncture" CACHE STRING "puncture or synchronous")
+set(EKG_ADVECTION "centered" CACHE STRING "centered or upwind")
+set_property(CACHE EKG_POTENTIAL PROPERTY STRINGS massive axion)
+set_property(CACHE EKG_GAUGE PROPERTY STRINGS puncture synchronous)
+set_property(CACHE EKG_ADVECTION PROPERTY STRINGS centered upwind)
+if(EKG_BACKREACTION AND EKG_FREEZE_GEOMETRY)
+  message(FATAL_ERROR "FREEZE_GEOMETRY and BACKREACTION cannot both be ON")
 endif()
-target_compile_definitions(eks_common PUBLIC
-  BSSN_USE_6TH_ORDER_DERIVS BSSN_GW_USE_DENDROLIB
-  BSSN_ENABLE_VTU_OUTPUT BSSN_COMPUTE_CONSTRAINTS
-  BSSN_ENABLE_VTU_CONSTRAINT_OUTPUT)
-target_compile_options(eks_common PUBLIC
-  $<$<COMPILE_LANG_AND_ID:CXX,GNU>:-fext-numeric-literals>)
-target_link_libraries(eks_common PUBLIC
-  dendro5 dendro_gr MPI::MPI_CXX GSL::gsl toml11::toml11
-  dendro_git_version_and_date)
-add_executable(eksSolver src/eks_main.cpp src/bssnAEH.cpp src/bssnCtx.cpp)
-target_link_libraries(eksSolver PRIVATE eks_common m)
-# Generated .cpp.inc files are textually included, NOT separate sources.
+if(EKG_BUILD_SOLVER AND EKG_REFERENCE_EMITTER)
+  message(FATAL_ERROR "The reference emitter is for independent tests only, not ekgSolver")
+endif()
+foreach(pair "EKG_POTENTIAL;massive;axion" "EKG_GAUGE;puncture;synchronous" "EKG_ADVECTION;centered;upwind")
+  list(GET pair 0 key)
+  list(GET pair 1 a)
+  list(GET pair 2 b)
+  if(NOT "${${key}}" STREQUAL "${a}" AND NOT "${${key}}" STREQUAL "${b}")
+    message(FATAL_ERROR "Invalid ${key}: ${${key}}")
+  endif()
+endforeach()
+set(EKG_GAUGE_SYNCHRONOUS OFF)
+set(EKG_POTENTIAL_AXION OFF)
+set(EKG_ADVECTION_UPWIND OFF)
+if(EKG_GAUGE STREQUAL "synchronous")
+  set(EKG_GAUGE_SYNCHRONOUS ON)
+endif()
+if(EKG_POTENTIAL STREQUAL "axion")
+  set(EKG_POTENTIAL_AXION ON)
+endif()
+if(EKG_ADVECTION STREQUAL "upwind")
+  set(EKG_ADVECTION_UPWIND ON)
+endif()
+set(_config_dir "${CMAKE_CURRENT_BINARY_DIR}/include")
+file(MAKE_DIRECTORY "${_config_dir}")
+configure_file(cmake/ekg_build_config.h.in "${_config_dir}/ekg_build_config.h")
+set(EKG_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated" CACHE PATH "Generated kernel directory")
+set(_generated_files ekg_full_rhs.inc ekg_vacuum_rhs.inc ekg_matter_rhs.inc
+  ekg_constraints.inc ekg_derivative_specs.h ekg_input_aliases.inc
+  ekg_output_aliases.inc ekg_derivative_aliases.inc ekg_field_asserts.inc
+  ekg_apply_sources.inc ekg_generated_config.h ekg_potential.h manifest.json)
+set(_outputs)
+foreach(f IN LISTS _generated_files)
+  list(APPEND _outputs "${EKG_GENERATED_DIR}/${f}")
+endforeach()
+set(_backreaction off)
+if(EKG_BACKREACTION)
+  set(_backreaction on)
+endif()
+if(EKG_REGENERATE)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  set(_ref_flag)
+  if(EKG_REFERENCE_EMITTER)
+    set(_ref_flag --reference-emitter)
+  endif()
+  add_custom_command(OUTPUT ${_outputs}
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/CodeGen/generate_ekg.py"
+      --out-dir "${EKG_GENERATED_DIR}" --backreaction ${_backreaction}
+      --potential ${EKG_POTENTIAL} --gauge ${EKG_GAUGE} --advection ${EKG_ADVECTION}
+      ${_ref_flag}
+    DEPENDS CodeGen/generate_ekg.py CodeGen/ekg_equations.py
+      "${_config_dir}/ekg_build_config.h"
+    COMMENT "DendroSym: generate matter, vacuum, fused EKG and constraint kernels"
+    VERBATIM USES_TERMINAL)
+else()
+  foreach(f IN LISTS _outputs)
+    if(NOT EXISTS "${f}")
+      message(FATAL_ERROR "Missing pre-generated ${f}; run CodeGen/generate_ekg.py first")
+    endif()
+  endforeach()
+endif()
+add_custom_target(ekgCodegen DEPENDS ${_outputs})
+add_library(ekg_initial STATIC src/ekg_initial_data.cpp)
+add_dependencies(ekg_initial ekgCodegen)
+target_compile_features(ekg_initial PUBLIC cxx_std_17)
+target_include_directories(ekg_initial PUBLIC include "${_config_dir}" "${EKG_GENERATED_DIR}")
+if(EKG_BUILD_TESTS)
+  enable_testing()
+  add_executable(ekgKernelTests tests/test_generated.cpp)
+  add_dependencies(ekgKernelTests ekgCodegen)
+  target_compile_features(ekgKernelTests PRIVATE cxx_std_17)
+  target_include_directories(ekgKernelTests PRIVATE include "${_config_dir}" "${EKG_GENERATED_DIR}")
+  add_executable(ekgInitialDataTests tests/test_initial_data.cpp)
+  target_link_libraries(ekgInitialDataTests PRIVATE ekg_initial)
+  add_test(NAME ekg_generated_kernel_algebra COMMAND ekgKernelTests)
+  add_test(NAME ekg_radial_initial_data COMMAND ekgInitialDataTests)
+endif()
+if(EKG_BUILD_SOLVER)
+  foreach(dep dendro5 dendro_gr MPI::MPI_CXX GSL::gsl toml11::toml11 dendro_git_version_and_date)
+    if(NOT TARGET ${dep})
+      message(FATAL_ERROR "EKG needs parent target ${dep}. Add EKG_GR after the parent dependency setup.")
+    endif()
+  endforeach()
+  if(DENDRO_USE_NEW_DERIVS)
+    message(FATAL_ERROR "This native EKG adapter uses the legacy explicit FD interface. Configure DENDRO_USE_NEW_DERIVS=OFF.")
+  endif()
+  set(EKG_BSSN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../BSSN_GR" CACHE PATH "Local experimental BSSN_GR base")
+  set(EKG_NATIVE_SOURCE_DIR "" CACHE PATH "Optional persistent, already adapted 26-field native source tree")
+  if(EKG_NATIVE_SOURCE_DIR)
+    set(_native "${EKG_NATIVE_SOURCE_DIR}")
+    message(STATUS "EKG uses your editable adapted source tree ${_native}; automatic source adaptation skipped")
+  else()
+    set(_native "${CMAKE_CURRENT_BINARY_DIR}/native")
+    include(cmake/PrepareNative.cmake)
+    ekg_prepare_native("${EKG_BSSN_SOURCE_DIR}" "${_native}")
+  endif()
+  file(READ "${_native}/include/parameters.h" _count_header)
+  if(NOT _count_header MATCHES "BSSN_NUM_VARS[ \t]*=[ \t]*26[ \t]*;")
+    message(FATAL_ERROR "The EKG native application must compile with 26 fields, not a linked 24-field context")
+  endif()
+  # Only this directory's inherited BSSN defines are filtered. Parent targets
+  # retain their original options, kernels and field count.
+  get_directory_property(_inherited COMPILE_DEFINITIONS)
+  list(FILTER _inherited EXCLUDE REGEX "^BSSN_")
+  set_directory_properties(PROPERTIES COMPILE_DEFINITIONS "${_inherited}")
+  set(_native_names parameters.cpp grUtils.cpp rhs.cpp sommerfeld_bcs.cpp
+    derivs.cpp physcon.cpp profile_params.cpp bssn_constraints.cpp
+    TPCoordTransf.cpp TPEquations.cpp TPFuncAndJacobian.cpp TPNewton.cpp TPUtilities.cpp
+    TwoPunctures.cpp dataUtils.cpp hadrhs.F90 trumpet.cpp bssnCtx.cpp bssnAEH.cpp)
+  set(_native_sources)
+  foreach(f IN LISTS _native_names)
+    if(NOT EXISTS "${_native}/src/${f}")
+      message(FATAL_ERROR "Missing native source ${_native}/src/${f}; compare source lists with your BSSN target")
+    endif()
+    list(APPEND _native_sources "${_native}/src/${f}")
+  endforeach()
+  add_library(ekg_common OBJECT ${_native_sources} src/ekg_config.cpp src/ekg_rhs.cpp src/ekg_amr.cpp)
+  add_dependencies(ekg_common ekgCodegen)
+  target_compile_features(ekg_common PUBLIC cxx_std_17)
+  target_include_directories(ekg_common PUBLIC include "${_config_dir}" "${EKG_GENERATED_DIR}"
+    "${_native}" "${_native}/include" "${_native}/scripts")
+  if(DEFINED CHECK_GIT_INCLUDE_PATH)
+    target_include_directories(ekg_common PUBLIC "${CHECK_GIT_INCLUDE_PATH}")
+  endif()
+  target_compile_definitions(ekg_common PUBLIC BSSN_USE_6TH_ORDER_DERIVS
+    BSSN_GW_USE_DENDROLIB BSSN_ENABLE_VTU_OUTPUT BSSN_COMPUTE_CONSTRAINTS
+    BSSN_ENABLE_VTU_CONSTRAINT_OUTPUT BSSN_PROFILE_HUMAN_READABLE)
+  target_compile_options(ekg_common PRIVATE $<$<COMPILE_LANG_AND_ID:CXX,GNU>:-fext-numeric-literals>)
+  target_link_libraries(ekg_common PUBLIC dendro5 dendro_gr MPI::MPI_CXX GSL::gsl
+    toml11::toml11 dendro_git_version_and_date ekg_initial)
+  add_executable(ekgSolver "${_native}/src/bssngr_main.cpp")
+  target_link_libraries(ekgSolver PRIVATE ekg_common m)
+  execute_process(COMMAND git -C "${EKG_BSSN_SOURCE_DIR}/.." rev-parse HEAD
+    OUTPUT_VARIABLE _commit OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/ekg_build_manifest.txt"
+    "Local application commit: ${_commit}\nNative source: ${_native}\nBACKREACTION=${EKG_BACKREACTION}\nFREEZE_GEOMETRY=${EKG_FREEZE_GEOMETRY}\nFUSED_RHS=${EKG_FUSED_RHS}\nPOTENTIAL=${EKG_POTENTIAL}\nGAUGE=${EKG_GAUGE}\nADVECTION=${EKG_ADVECTION}\n26 fields; native mesh/WAMR/transfer/ETS, CPU FD6\nFull Dendro build and evolution not validated by this delivery.\n")
+endif()
