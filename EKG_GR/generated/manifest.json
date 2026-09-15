@@ -1,0 +1,59 @@
+{
+  "schema": 2,
+  "backreaction": true,
+  "potential": "massive",
+  "gauge": "puncture",
+  "advection": "centered",
+  "field_order": [
+    "alpha",
+    "chi",
+    "K",
+    "Gt0",
+    "Gt1",
+    "Gt2",
+    "beta0",
+    "beta1",
+    "beta2",
+    "B0",
+    "B1",
+    "B2",
+    "gt0",
+    "gt1",
+    "gt2",
+    "gt3",
+    "gt4",
+    "gt5",
+    "At0",
+    "At1",
+    "At2",
+    "At3",
+    "At4",
+    "At5",
+    "scalarPhi",
+    "scalarPi"
+  ],
+  "derivative_arrays": 150,
+  "outputs": {
+    "ekg_full_rhs.inc": {
+      "outputs": 26,
+      "original_ops": 1146886
+    },
+    "ekg_vacuum_rhs.inc": {
+      "outputs": 24,
+      "original_ops": 1142633
+    },
+    "ekg_matter_rhs.inc": {
+      "outputs": 22,
+      "original_ops": 4684
+    },
+    "ekg_constraints.inc": {
+      "outputs": 4,
+      "original_ops": 330247
+    }
+  },
+  "generator_sha256": "5002a4c313d39f4ea091de48c26225c3b2d9864a2990dc561f7bf4acb9a1dcc2",
+  "sympy_version": "1.14.0",
+  "dendrosym_version": "0.1.0",
+  "emitter": "dendrosym",
+  "full_solver_run_validated": false
+}
