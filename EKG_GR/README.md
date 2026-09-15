@@ -1,66 +1,4 @@
-# EKG_GR: native Dendro wavelet AMR with DendroSym-generated equations
-
-This revision replaces the earlier custom EKG context/RK implementation. It is
-an extension of the **local experimental BSSN_GR application**, not a new mesh
-or time integrator. Add `add_subdirectory(EKG_GR)` after the parent's dependency
-setup and existing BSSN application.
-
-**Validation boundary:** the symbolic algebra, reference-emitted C++ kernels,
-initial-data solver, and source-adapter fixture tests were run. DendroSym was not
-installed in the execution environment, and a complete experimental Dendro
-checkout could not be fetched. Therefore the DendroSym emitter, actual native
-application build, MPI evolution, remeshing, and transfer have NOT been executed
-here. The CMake adapter checks source hooks and stops on an incompatible layout.
-See `docs/VALIDATION.md` for exactly what was and was not tested.
-
-## 1. Application architecture
-
-The sibling `BSSN_GR/` and its vacuum target are not edited or linked as a
-24-field application. At configure time, `cmake/PrepareNative.cmake` copies your
-local BSSN_GR into `build/EKG_GR/native/` and makes a small set of explicit
-changes:
-
-* append `U_SCALARPHI=24`, `U_SCALARPI=25`; compile the whole private application
-  with `BSSN_NUM_VARS=26`;
-* register new initial-data IDs and the `[EKG]` TOML table;
-* dispatch the native per-block RHS and constraint entry points to generated EKG
-  kernels;
-* wrap native wavelet refinement tests with optional, fixed scalar normalization.
-
-The adapter also guards zero-valued optional event frequencies (for example
-GW extraction and checkpoint writing), preserving the native schedule for
-nonzero values without modulo-by-zero.
-
-The native `bssnCtx.cpp`, `bssngr_main.cpp`, DVector allocation, MPI exchange,
-`is_remesh`, mesh construction, `grid_transfer`, remesh-and-transfer sequence,
-and ETS mesh synchronization remain the basis of the application. Its native
-RK implementation is used, not the bespoke RK4 loop from the previous package.
-**All 26 fields go through the native stage storage and intergrid transfer.**
-
-The source adapter does not parse arbitrary C++. It targets the experimental
-layout described in `docs/PROVENANCE.md`; missing/ambiguous hooks cause a CMake
-error. Compare those hooks with your checkout rather than forcing a mismatch.
-
-The original entry-point bodies remain below an early return in the copied
-`rhs.cpp` and `physcon.cpp`. They provide readable reference code and preserve
-helper definitions; they are not executed a second time.
-
-### Persistent, editable native application copy
-
-Configuration recreates `build/EKG_GR/native`, so do not keep permanent edits
-there. To take full ownership of the expanded source, copy it once:
-
-```sh
-cp -R build-ekg/EKG_GR/native /absolute/path/to/my-ekg-native
-cmake -S . -B build-ekg \
-  -DEKG_NATIVE_SOURCE_DIR=/absolute/path/to/my-ekg-native
-```
-
-This skips automatic source adaptation and compiles your edited 26-field native
-source. `EKG_GR/src`, `include`, and `CodeGen` always remain ordinary editable
-source. No Python installer or source-patching step is required.
-
-## 2. Compile-time choices
+## Compile-time choices
 
 | Option | Default | Meaning |
 |---|---|---|
@@ -83,7 +21,7 @@ correction as the full Gamma-driver equation. The fused path must NOT add those
 sources again. Scalar mass/self-interaction physics is not removed in test-field
 mode; only its gravitational backreaction is removed.
 
-## 3. Generate the equations
+## Generate the equations
 
 Use the Python interpreter in which you installed DendroSym:
 
@@ -120,49 +58,175 @@ Keep all generation options consistent with the CMake choices. Static assertions
 reject mismatched coupling/gauge/potential/advection flags. Do not use the
 `--reference-emitter` testing option for production: `ekgSolver` rejects it.
 
-## 4. Build the fully coupled application
+## Build on LANL Darwin (current working configuration)
 
-Keep the compiler and dependency settings of your working **CPU** vacuum build.
-This first integration uses the native legacy explicit FD6 interface; it does
-not port the GPU, SIMD, or new derivative backends.
+The Darwin login environment used here has a system Git/HTTPS OpenSSL--Kerberos 
+library mismatch (`git-remote-https` can fail in `libk5crypto.so.3` while resolving
+`EVP_KDF_ctrl`).  
+
+The root project remains unchanged except for adding the EKG application after
+the ordinary vacuum application:
 
 ```cmake
-# Root CMakeLists.txt, after the existing dependency setup:
-add_subdirectory(BSSN_GR)  # existing line
-add_subdirectory(EKG_GR)   # new line
+# Root CMakeLists.txt, after dependency setup:
+add_subdirectory(BSSN_GR)  # existing vacuum application
+add_subdirectory(EKG_GR)   # EKG application
 ```
 
-Example from the repository root:
+4.1 Local dependency layout
+
+A convenient Darwin layout is:
+
+```text
+/<your project space>/
+  Dendro-GRCA/             # this repository
+  Dendro-5.01/             # local Dendro source expected by Dendro-GRCA
+  deps/
+    spdlog/                # v1.14.1
+    toml11/                # v4.4.0
+    libxsmm/               # revision requested/validated with Dendro-5.01
+```
+
+The `spdlog` and `toml11` versions above are the versions requested by the
+current Dendro-5.01 CMake configuration.  Dendro-5.01 currently requests the
+`main` branch of LIBXSMM; record the exact commit used for every production
+build.  If the local Dendro checkout is pinned by the parent project, use that
+expected branch/commit rather than an unrelated Dendro-5.01 checkout.
+
+Because HTTPS Git is broken in the affected Darwin environment, clone/update
+these repositories using a working Git transport (for example GitHub SSH) or
+another approved mechanism.  Once the source trees exist locally, the CMake
+build itself does not need network access.
+
+It is useful to record the dependency revisions before configuring:
 
 ```sh
+git -C /<your project space>/Dendro-GRCA rev-parse HEAD
+git -C /<your project space>/Dendro-5.01 rev-parse HEAD
+git -C /<your project space>/deps/spdlog describe --tags --always
+git -C /<your project space>/deps/toml11 describe --tags --always
+git -C /<your project space>/deps/libxsmm rev-parse HEAD
+```
+
+### Generate equations before the HPC build
+
+The recommended Darwin workflow is to generate the DendroSym kernels separately
+and compile the generated files on Darwin.  This avoids making DendroSym a build
+time dependency on the compute system.  From an environment with DendroSym
+installed:
+
+```sh
+python EKG_GR/CodeGen/generate_ekg.py \
+  --out-dir EKG_GR/generated \
+  --backreaction on \
+  --potential massive \
+  --gauge puncture \
+  --advection centered
+```
+
+Copy or commit the resulting `EKG_GR/generated/` directory into the Darwin
+checkout.  The Darwin CMake configuration below therefore uses
+`EKG_REGENERATE=OFF`.
+
+### Configure the fully coupled EKG build on Darwin
+
+From the repository root:
+
+```sh
+cd /<your project space>/Dendro-GRCA
+rm -rf build-ekg
+
 cmake -S . -B build-ekg \
+  -DFETCHCONTENT_SOURCE_DIR_DENDROLIB=/<your project space>/Dendro-5.01 \
+  -DFETCHCONTENT_SOURCE_DIR_SPDLOG=/<your project space>/deps/spdlog \
+  -DFETCHCONTENT_SOURCE_DIR_TOML11=/<your project space>/deps/toml11 \
+  -DUSE_LOCAL_XSMM=ON \
+  -DLOCAL_XSMM_PATH=/<your project space>/deps/libxsmm \
+  -DEKG_REGENERATE=OFF \
+  -DEKG_GENERATED_DIR="$PWD/EKG_GR/generated" \
   -DEKG_BACKREACTION=ON \
   -DEKG_FREEZE_GEOMETRY=OFF \
   -DEKG_FUSED_RHS=ON \
   -DEKG_POTENTIAL=massive \
   -DEKG_GAUGE=puncture \
   -DEKG_ADVECTION=centered \
-  -DDENDRO_USE_NEW_DERIVS=OFF \
-  -DPython3_EXECUTABLE=/absolute/path/to/your/python
+  -DDENDRO_USE_NEW_DERIVS=OFF
+```
 
-cmake --build build-ekg \
-  --target bssnSolver ekgSolver ekgKernelTests ekgInitialDataTests -j 4
+The local source overrides are important on this Darwin software stack.  Without
+them CMake attempts HTTPS clones and can fail before either BSSN or EKG is
+configured, e.g.
 
+```text
+/usr/libexec/git-core/git-remote-https: symbol lookup error:
+/lib64/libk5crypto.so.3: undefined symbol: EVP_KDF_ctrl, version OPENSSL_1_1_1b
+```
+
+This error is a dependency-fetch/environment problem, not an EKG equation or
+Dendro compilation error.
+
+### Build vacuum GR and EKG independently
+
+Build the vacuum target first, then the EKG target:
+
+```sh
+cmake --build build-ekg --target bssnSolver -j 8
+cmake --build build-ekg --target ekgSolver  -j 8
+```
+
+Or build both in one command:
+
+```sh
+cmake --build build-ekg --target bssnSolver ekgSolver -j 8
+```
+
+If the optional EKG tests are enabled in the current checkout, also build/run:
+
+```sh
+cmake --build build-ekg --target ekgKernelTests ekgInitialDataTests -j 8
 ./build-ekg/EKG_GR/ekgKernelTests
 ./build-ekg/EKG_GR/ekgInitialDataTests
 ```
 
-The example public vacuum target is `bssnSolver`; keep your local name if it
-already differs. The new executable is `build-ekg/EKG_GR/ekgSolver`.
+The expected executables are:
 
-Do not link the original `bssn_common` or change the original BSSN field count.
-The private native application must be compiled entirely with the EKG headers.
-The generated `ekg_field_asserts.inc` checks all 26 enum positions. Also inspect
-`native/EKG_FIXED_SIZE_AUDIT.txt` for literal 24-entry buffers in your checkout.
-Known refinement/output index arrays are extended explicitly; unrelated arrays
-and constants are not blindly rewritten.
+```text
+build-ekg/BSSN_GR/bssnSolver
+build-ekg/EKG_GR/ekgSolver
+```
 
-## 5. The first run is fully coupled AND wavelet-adaptive
+The vacuum application remains a 24-field application.  Do not change the
+original BSSN field count or link its 24-field application objects into the EKG
+solver.  The private EKG native application is compiled consistently with all 26
+fields.  The generated `ekg_field_asserts.inc` checks their enum positions.
+Also inspect `build-ekg/EKG_GR/native/EKG_FIXED_SIZE_AUDIT.txt` after
+configuration for any checkout-specific literal 24-entry buffers.
+
+### Reconfiguration rules
+
+Use a fresh build directory whenever changing a compile-time physics choice,
+especially:
+
+```text
+EKG_BACKREACTION
+EKG_FREEZE_GEOMETRY
+EKG_FUSED_RHS
+EKG_POTENTIAL
+EKG_GAUGE
+EKG_ADVECTION
+```
+
+For example, do not reuse a massive/coupled build directory for an axion or
+test-field build.  Also regenerate `EKG_GR/generated/` whenever the symbolic
+physics/gauge/advection choices change, and keep those choices identical to the
+CMake configuration.
+
+## The first run is fully coupled AND wavelet-adaptive
+
+Run from the Dendro-GRCA repository root so the relative TOML path is resolved
+consistently.  Start with one MPI rank as a smoke/validation run; use the Darwin
+batch scheduler and allocated compute resources for nontrivial production runs
+rather than running them on a front-end/login node.
 
 ```sh
 OMP_NUM_THREADS=1 mpirun -np 1 \
@@ -226,7 +290,7 @@ This is a coupled, inhomogeneous code/AMR test with nonzero spatial stress. It i
 not an initial black hole or an astrophysical dark-matter cloud model. The radial
 solve and interpolation must be refined independently of the octree.
 
-## 6. Other supplied parameter files
+## Other supplied parameter files
 
 | File | ID | Build choices |
 |---|---|---|
@@ -254,7 +318,7 @@ into a black-hole initial-data solve. Geometry IDs below 100 remain native IDs
 and initialize phi=Pi=0 unless you explicitly add a scalar-aware, constraint-
 consistent initial-data path.
 
-## 7. What must be checked on your machine
+## What must be checked on your machine
 
 1. Run the generated C++ unit tests with YOUR DendroSym emission. They compare
    fused and split kernels over all 26 outputs, check scalar signs, the source
@@ -273,7 +337,7 @@ consistent initial-data path.
 A source-level hook test or pointwise algebra test is NOT an AMR evolution test.
 No published-accuracy or production-readiness claim is made here.
 
-## 8. Remaining scope boundaries
+## Remaining scope boundaries
 
 * CPU, explicit FD6, and native ETS are targeted. LTS/GPU/SIMD/new derivatives
   require their own source integration and tests.
@@ -290,3 +354,4 @@ No published-accuracy or production-readiness claim is made here.
   positive solution is reported, not disguised as constraint-satisfying data.
 * The final source compatibility test is your local native build. The checked
   hooks are a guard against source drift, not a substitute for compilation.
+
