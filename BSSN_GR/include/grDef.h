@@ -1,0 +1,160 @@
+//
+// Created by milinda on 10/8/18.
+//
+
+#ifndef DENDRO_5_0_GRDEF_H
+#define DENDRO_5_0_GRDEF_H
+
+#include <cctype>
+#include <string>
+
+#define Rx (bssn::BSSN_COMPD_MAX[0] - bssn::BSSN_COMPD_MIN[0])
+#define Ry (bssn::BSSN_COMPD_MAX[1] - bssn::BSSN_COMPD_MIN[1])
+#define Rz (bssn::BSSN_COMPD_MAX[2] - bssn::BSSN_COMPD_MIN[2])
+
+#define RgX (bssn::BSSN_OCTREE_MAX[0] - bssn::BSSN_OCTREE_MIN[0])
+#define RgY (bssn::BSSN_OCTREE_MAX[1] - bssn::BSSN_OCTREE_MIN[1])
+#define RgZ (bssn::BSSN_OCTREE_MAX[2] - bssn::BSSN_OCTREE_MIN[2])
+
+#define GRIDX_TO_X(xg) \
+    (((Rx / RgX) * (xg - bssn::BSSN_OCTREE_MIN[0])) + bssn::BSSN_COMPD_MIN[0])
+#define GRIDY_TO_Y(yg) \
+    (((Ry / RgY) * (yg - bssn::BSSN_OCTREE_MIN[1])) + bssn::BSSN_COMPD_MIN[1])
+#define GRIDZ_TO_Z(zg) \
+    (((Rz / RgZ) * (zg - bssn::BSSN_OCTREE_MIN[2])) + bssn::BSSN_COMPD_MIN[2])
+
+#define X_TO_GRIDX(xc) \
+    (((RgX / Rx) * (xc - bssn::BSSN_COMPD_MIN[0])) + bssn::BSSN_OCTREE_MIN[0])
+#define Y_TO_GRIDY(yc) \
+    (((RgY / Ry) * (yc - bssn::BSSN_COMPD_MIN[1])) + bssn::BSSN_OCTREE_MIN[1])
+#define Z_TO_GRIDZ(zc) \
+    (((RgZ / Rz) * (zc - bssn::BSSN_COMPD_MIN[2])) + bssn::BSSN_OCTREE_MIN[2])
+
+// type of the rk method (index-matched to ts::ETSType in dendrolib ts.h)
+//  0=RK3 1=RK4 2=RK5(Butcher,6-stage)  3/4/5=MSRK2_1/MSRK2_2/MSRK3
+//  6=RALSTON 7=CASH_KARP 8=RKF45 9=NYSTROM  10=RK6(Luther,7-stage)  11=RK6_TSRK
+enum RKType {
+    RK3 = 0,
+    RK4,
+    RK5,
+    RK4_MSRK2_1,
+    RK4_MSRK2_2,
+    RK4_MSRK3,
+    RK4_RALSTON,
+    RK45_CASH_KARP,
+    RKF45,
+    RK5_NYSTROM,
+    RK6,
+    RK6_TSRK
+};
+
+// Canonical name for an RKType id (index-matched to ts::ETSType).
+inline const char* rk_type_name(unsigned int t) {
+    switch ((RKType)t) {
+        case RK3: return "RK3";
+        case RK4: return "RK4";
+        case RK5: return "RK5";
+        case RK4_MSRK2_1: return "RK4_MSRK2_1";
+        case RK4_MSRK2_2: return "RK4_MSRK2_2";
+        case RK4_MSRK3: return "RK4_MSRK3";
+        case RK4_RALSTON: return "RK4_RALSTON";
+        case RK45_CASH_KARP: return "RK45_CASH_KARP";
+        case RKF45: return "RKF45";
+        case RK5_NYSTROM: return "RK5_NYSTROM";
+        case RK6: return "RK6";
+        case RK6_TSRK: return "RK6_TSRK";
+        default: return "UNKNOWN";
+    }
+}
+
+// Map a case-insensitive method name (canonical or common alias) to its RKType
+// id; returns -1 if unrecognized. Lets parfiles use BSSN_RK_TYPE = "RK6_TSRK"
+// instead of the bare integer.
+inline int rk_type_from_string(const std::string& s) {
+    std::string k;
+    for (char c : s) k.push_back((char)std::toupper((unsigned char)c));
+    struct Alias { const char* name; int id; };
+    static const Alias table[] = {
+        {"RK3", RK3}, {"RK4", RK4}, {"RK5", RK5},
+        {"RK4_MSRK2_1", RK4_MSRK2_1}, {"MSRK2_1", RK4_MSRK2_1},
+        {"RK4_MSRK2_2", RK4_MSRK2_2}, {"MSRK2_2", RK4_MSRK2_2},
+        {"RK4_MSRK3", RK4_MSRK3},     {"MSRK3", RK4_MSRK3},
+        {"RK4_RALSTON", RK4_RALSTON}, {"RALSTON", RK4_RALSTON},
+        {"RK45_CASH_KARP", RK45_CASH_KARP}, {"CASH_KARP", RK45_CASH_KARP},
+        {"RKF45", RKF45},
+        {"RK5_NYSTROM", RK5_NYSTROM}, {"NYSTROM", RK5_NYSTROM},
+        {"RK6", RK6},
+        {"RK6_TSRK", RK6_TSRK}, {"TSRK", RK6_TSRK},
+    };
+    for (const auto& a : table)
+        if (k == a.name) return a.id;
+    return -1;
+}
+
+namespace bssn {
+/**@brief BSSN evolution variables*/
+enum VAR {
+    U_ALPHA = 0,
+    U_CHI,
+    U_K,
+    U_GT0,
+    U_GT1,
+    U_GT2,
+    U_BETA0,
+    U_BETA1,
+    U_BETA2,
+    U_B0,
+    U_B1,
+    U_B2,
+    U_SYMGT0,
+    U_SYMGT1,
+    U_SYMGT2,
+    U_SYMGT3,
+    U_SYMGT4,
+    U_SYMGT5,
+    U_SYMAT0,
+    U_SYMAT1,
+    U_SYMAT2,
+    U_SYMAT3,
+    U_SYMAT4,
+    U_SYMAT5
+};
+
+/**
+ * @brief BSSN constraint variables
+ * C_HAM - Hamiltonian constraint
+ * C_MOM - Momentum constraint x, y, z
+ * C_PSI4_REAL - real part of PSI4 scalar
+ * C_PSI4_IMG  - imaginary part of PSI4 scalar
+ */
+enum VAR_CONSTRAINT {
+    C_HAM = 0,
+    C_MOM0,
+    C_MOM1,
+    C_MOM2,
+    C_PSI4_REAL,
+    C_PSI4_IMG
+};
+
+static const char* BSSN_VAR_NAMES[] = {
+    "U_ALPHA",  "U_CHI",    "U_K",      "U_GT0",    "U_GT1",    "U_GT2",
+    "U_BETA0",  "U_BETA1",  "U_BETA2",  "U_B0",     "U_B1",     "U_B2",
+    "U_SYMGT0", "U_SYMGT1", "U_SYMGT2", "U_SYMGT3", "U_SYMGT4", "U_SYMGT5",
+    "U_SYMAT0", "U_SYMAT1", "U_SYMAT2", "U_SYMAT3", "U_SYMAT4", "U_SYMAT5"};
+
+static const char* BSSN_CONSTRAINT_VAR_NAMES[] = {
+    "C_HAM", "C_MOM0", "C_MOM1", "C_MOM2", "C_PSI4_REAL", "C_PSI4_IMG"};
+
+/**
+ * @brief Refinement mode types.
+ * WAMR : Wavelet based refinement.
+ * EH : black hole event horizon based refinement.
+ * EH_WAMR : both even horizon as well as WAMR based refinement.
+ * BH_LOC : BH location based refinement, if turned on track the bh locations.
+ * BH_WAMR : mixing WAMR + BH_LOC
+ */
+enum RefinementMode { WAMR = 0, EH, EH_WAMR, BH_LOC, BH_WAMR};
+
+}  // end of namespace bssn
+
+#endif  // DENDRO_5_0_GRDEF_H

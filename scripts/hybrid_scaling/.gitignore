@@ -1,0 +1,7 @@
+build_hybrid*/
+results_*/
+*_steps.jsonl
+*.log
+*.csv
+slurm_*.out
+hybrid_scaling_*.out

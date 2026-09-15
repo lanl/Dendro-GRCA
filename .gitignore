@@ -8,3 +8,4 @@ bld*
 __pycache__
 CMakeCache*
 CMakeFiles
+.DS_Store

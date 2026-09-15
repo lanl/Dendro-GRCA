@@ -14,13 +14,13 @@ from sympy.functions.special.tensor_functions import KroneckerDelta
 from sympy.utilities import numbered_symbols
 from sympy.printing import print_ccode
 from sympy.printing.dot import dotprint
-
+import networkx as nx
+import nxgraph
+import sympy
 import re as regex
 
 import string
 import random
-import cog
-
 
 # internal variables
 undef = symbols('undefined')
@@ -47,6 +47,7 @@ negone = symbols('negone_')
 
 e_i = [0, 1, 2]
 e_ij = [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2), (2, 0), (2, 1), (2, 2)]
+e_ij_offdiag = [(0, 1), (0, 2), (1, 2)] 
 
 Ricci = undef
 
@@ -171,11 +172,10 @@ def set_kreiss_oliger_dissipation(g):
 # Covariant Derivatives
 def DiDj(a):
     """
-    Defines the covariant derivative for a scalar a with respect to the full metric.
-    [ewh] Actually this defines two covariant derivatives acting on a scalar.
-    The derivative in this case is built from the full (non-conformal) metric.
-    Thus C3 is built from the full metric.  This object is symmetric in both
-    indices.
+    Actually this defines two covariant derivatives acting on a scalar.  The 
+    derivative in this case is built from the full (non-conformal) metric as 
+    C3 is built from the full (non-conformal) metric.  This object is 
+    symmetric in both indices.
     """
     global d, C3
 
@@ -185,17 +185,14 @@ def DiDj(a):
 
 def _Di_Dj(a):
     """
-    Defines the covariant derivative.
-    [ewh]  Actually, this defines two covariant derivatives acting on a scalar.
+    This defines two covariant derivatives acting on a scalar.
     The use of C2 below, however, suggests that this derivative is built
     from the conformal metric.  Such an operator and term shows up in the
     definition of the Ricci scalar which, in turn shows up in the trace-free
     term in the At evolution equation.  As with DiDj, this object is symmetric
     in both indices when acting on a scalar.
     """
-#[ewh] shouldn't this be C2 instead of C3, i.e.:
     global d, C2
-#    global d, d2, C3
 
     m = Matrix([d2(i, j, a) - sum([C2[l, i, j] * d(l, a) for l in e_i]) for i, j in e_ij])
     return m.reshape(3, 3)
@@ -214,7 +211,7 @@ def up_up(A):
 # One index rasing
 def up_down(A):
     """
-    raises one index of A, i.e., A_{ij} --> A^i_j
+    raises the first index of A, i.e., A_{ij} --> A^i_j
     """
     global inv_metric
 
@@ -280,7 +277,9 @@ def laplacian(a, chi):
     full_metric = metric/chi
     inv_full_metric = simplify(full_metric.inv('ADJ'))
 
-#    return sum([(inv_full_metric[i, j] * d2(i, j, a) - sum([C3[l, i, j] * d(l, a) for l in e_i])) for i, j in e_ij])
+    # this could be optimized a tad as a symmetric x symmetric quantity is being summed over 
+    #return ( sum([ inv_full_metric[i, i] * ( d2(i, i, a) - sum([C3[l, i, i] * d(l, a) for l in e_i]) ) for i in e_i ]) + 2*sum([ inv_full_metric[i,j] * ( d2(i,j,a) - sum([C3[l,i,j] * d(l,a) for l in e_i ]) ) for i,j in e_ij_offdiag ]) )
+    
     return sum([ inv_full_metric[i, j] * ( d2(i, j, a) - sum([C3[l, i, j] * d(l, a) for l in e_i]) ) for i, j in e_ij])
 
 
@@ -290,7 +289,7 @@ def laplacian_conformal(a):
     to the tilded or conformally rescaled metric (called gt in various
     places).  We assume the rescaled metric is set as well the conformal
     factor, chi.  Note that C2 is built from the conformally rescaled
-    metrci.  This (conformal) laplacian is only used in the definition of
+    metric.  This (conformal) laplacian is only used in the definition of
     Ricci that shows up in the evolution equation for At (under the trace
     free operation), and even then only in the part that multiplies the
     metric and which will drop out on taking the trace free part.  So, in
@@ -304,7 +303,6 @@ def laplacian_conformal(a):
     if inv_metric == undef:
         inv_metric = get_inverse_metric()
 
-#ewh3    return sum([(inv_metric[i, j] * d2(i, j, a) - sum([C2[l, i, j] * d(l, a) for l in e_i])) for i, j in e_ij])
     return sum([ inv_metric[i, j] * (d2(i, j, a) - sum([C2[l, i, j] * d(l, a) for l in e_i])) for i, j in e_ij])
 
 
@@ -318,6 +316,8 @@ def sqr(a):
         inv_metric = get_inverse_metric()
 
     return sum([a[i, j]*sum([inv_metric[i, k] * inv_metric[j, l] * a[k, l] for k in e_i for l in e_i]) for i, j in e_ij])
+    
+    #return ( sum([a[i,i]*sum([inv_metric[i, k] * inv_metric[i, l] * a[k, l] for k in e_i for l in e_i]) for i in e_i]) + 2*sum([a[i,j]*sum([inv_metric[i, k] * inv_metric[j, l] * a[k, l] for k in e_i for l in e_i]) for i,j in e_ij_offdiag]) ) 
 
 
 def trace_free(x):
@@ -332,7 +332,7 @@ def trace_free(x):
     trace = sum([ inv_metric[i, j] * x[i, j] for i, j in e_ij])
 
     # X_{ab} - 1/3 gt_{ab} X.
-#    tf = Matrix([x[i, j] - 1/3*metric[i,j]*trace for i, j in e_ij])
+    # tf = Matrix([x[i, j] - 1/3*metric[i,j]*trace for i, j in e_ij])
     tf = Matrix([x[i, j] - metric[i,j]*trace/3 for i, j in e_ij])
 
     return tf.reshape(3, 3)
@@ -352,7 +352,7 @@ def vec_j_ad_j(b, f):
     """
     return sum([b[i]*ad(i, f) for i in e_i])
 
-#vec_k_del_k = vec_j_del_j
+    #vec_k_del_k = vec_j_del_j
 
 ##########################################################################
 # metric related functions
@@ -394,9 +394,15 @@ def get_inverse_metric():
 
 def get_first_christoffel():
     """
-    Computes and returns the first Christoffel Symbols. Assumes the metric has been set. e.g.,
+    Computes and returns the first Christoffel symbols (the quantity with three
+    lower indices). It assumes the metric has been set. e.g.,
 
     dendro.set_metric(gt);
+
+    Note, this is used to calculate the second Christoffel symbols as well 
+    as the 3D (conformal) Ricci tensor.  This should be built from the 
+    conformal metric, called "gamma tilde" or gt.  If the usual (non-conformal)
+    metric gets used, this will be wrong.  
 
     C1 = dendro.get_first_christoffel();
     """
@@ -411,7 +417,6 @@ def get_first_christoffel():
         for k in e_i:
             for j in e_i:
                 for i in e_i:
-#                    C1[k, i, j] = 1 / 2 * (d(j, metric[k, i]) + d(i, metric[k, j]) - d(k, metric[i, j]))
                     C1[k, i, j] = 0.5 * (d(j, metric[k, i]) + d(i, metric[k, j]) - d(k, metric[i, j]))
 
     return C1
@@ -419,10 +424,16 @@ def get_first_christoffel():
 
 def get_second_christoffel():
     """
-    Computes and returns the second Christoffel Symbols. Assumes the metric has been set. Will compute the first
-    Christoffel if not already computed. e.g.,
+    Computes and returns the second Christoffel symbols. Assumes the metric 
+    has been set. Will compute the first Christoffel if not already 
+    computed. e.g.,
 
     dendro.set_metric(gt);
+
+    Note that this assumes that the metric that comes in is the conformal 
+    metric, gt.  This calculates the "usual" Christoffel symbols that we 
+    usually refer to.  This includes the factor with the inverse metric.  
+    The final quantity has one index up and two indices down.  
 
     C2 = dendro.get_second_christoffel();
     """
@@ -440,12 +451,17 @@ def get_second_christoffel():
 
 def get_complete_christoffel(chi):
     """
-    Computes and returns the second Christoffel Symbols. Assumes the metric has been set. Will compute the first/second
-    Christoffel if not already computed. e.g.,
+    Computes and returns the second Christoffel symbols (despite the 
+    returned name of C3 -- sort of a bad choice).  These (in comparison 
+    to C2) are built from the non-conformal metric using the conformal 
+    metric ("gamma tilde") and the conformal factor, chi. Assumes the 
+    metric (i.e. the conformal metric) has been set and pulls in the 
+    conformal factor, chi. Will compute the first/second Christoffels if 
+    not already computed. e.g.,
 
     dendro.set_metric(gt);
 
-    C2_spatial = dendro.get_complete_christoffel();
+    C2_spatial = dendro.get_complete_christoffel(); 
     """
     global metric, inv_metric, undef, C1, C2, C3, d
 
@@ -458,7 +474,6 @@ def get_complete_christoffel(chi):
         for k in e_i:
             for j in e_i:
                 for i in e_i:
-#                    C3[i, j, k] = C2[i, j, k] - 1/(2*chi)*(KroneckerDelta(i, j) * d(k, chi) +
                     C3[i, j, k] = C2[i, j, k] - 0.5/(chi)*(KroneckerDelta(i, j) * d(k, chi) +
                                                            KroneckerDelta(i, k) * d(j, chi) -
                                                            metric[j, k]*sum([inv_metric[i, m]*d(m, chi) for m in e_i])
@@ -469,7 +484,7 @@ def get_complete_christoffel(chi):
 
 def compute_ricci(Gt, chi):
     """
-    Computes the Ricci tensor. e.g.,
+    Computes the (3D) Ricci tensor. e.g.,
 
     dendro.set_metric(gt)
 
@@ -483,7 +498,8 @@ def compute_ricci(Gt, chi):
 
     dendro.ricci
 
-    The conformal connection coefficient and the conformal variable needs to be supplied.
+    The conformal connection coefficient and the conformal variable needs 
+    to be supplied.
     """
     global metric, inv_metric, C1, C2
 
@@ -494,7 +510,7 @@ def compute_ricci(Gt, chi):
     #print('Done with Lphi') #simplify(Lchi))
 
 
-#ewh4    DKchiDkchi = Matrix([4*metric[i, j]*sum([sum([inv_metric[k, l]*d(l, chi) for l in e_i])*d(k, chi) for k in e_i]) for i, j in e_ij])
+    #ewh4 DKchiDkchi = Matrix([4*metric[i, j]*sum([sum([inv_metric[k, l]*d(l, chi) for l in e_i])*d(k, chi) for k in e_i]) for i, j in e_ij])
     DKchiDkchi = Matrix([0.25/chi/chi*metric[i, j]*sum([sum([inv_metric[k, l]*d(l, chi) for l in e_i])*d(k, chi) for k in e_i]) for i, j in e_ij])
 
     #print('done with DKchi') # simplify(DKchiDkchi))
@@ -509,13 +525,13 @@ def compute_ricci(Gt, chi):
 
     #print('done with Rt') #simplify(Rt))
 
-#ewh5    Rphi_tmp = Matrix([2*metric[i, j]*Lchi - 4*d(i, chi)*d(j, chi) for i, j in e_ij])
-#dwn    Rphi_tmp = Matrix([ 0.5*metric[i, j]*Lchi/chi - 0.25*d(i, chi)*d(j, chi)/chi/chi for i, j in e_ij])
+    #ewh5    Rphi_tmp = Matrix([2*metric[i, j]*Lchi - 4*d(i, chi)*d(j, chi) for i, j in e_ij])
+    #dwn    Rphi_tmp = Matrix([ 0.5*metric[i, j]*Lchi/chi - 0.25*d(i, chi)*d(j, chi)/chi/chi for i, j in e_ij])
 
     #print(simplify(Rphi_tmp))
 
-#ewh6    Rphi = -2*_Di_Dj(chi) - Rphi_tmp.reshape(3, 3) - DKchiDkchi.reshape(3, 3)
-#dwn    Rphi = -0.5*_Di_Dj(chi)/chi - Rphi_tmp.reshape(3, 3) - DKchiDkchi.reshape(3, 3)
+    #ewh6    Rphi = -2*_Di_Dj(chi) - Rphi_tmp.reshape(3, 3) - DKchiDkchi.reshape(3, 3)
+    #dwn    Rphi = -0.5*_Di_Dj(chi)/chi - Rphi_tmp.reshape(3, 3) - DKchiDkchi.reshape(3, 3)
     xRphi = Matrix( [ 1/(2*chi)*(d2(i,j,chi) -
           sum(C2[k,j,i]*d(k,chi) for k in e_i)) -
           1/(4*chi*chi)*d(i,chi)*d(j,chi) for i, j in e_ij]).reshape(3,3)
@@ -560,7 +576,7 @@ def construct_cse(ex,vnames,idx):
     
     ee_name = 'DENDRO_' #''.join(random.choice(string.ascii_uppercase) for _ in range(5))
     ee_syms = numbered_symbols(prefix=ee_name)
-    _v = cse(lexp, symbols=ee_syms, optimizations='basic')
+    _v = cse(lexp, symbols=ee_syms, optimizations="basic")
     
     return [_v,count_ops(lexp)]
 
@@ -570,8 +586,10 @@ def generate_cpu(ex, vnames, idx):
     """
     Generate the C++ code by simplifying the expressions.
     """
+    # generate_code_nx(ex,vnames,idx)
+    # return
     # print(ex)
-    
+    custom_functions = {'grad': 'grad', 'grad2': 'grad2', 'agrad': 'agrad', 'kograd': 'kograd'}
     mi = [0, 1, 2, 4, 5, 8]
     midx = ['00', '01', '02', '11', '12', '22']
     
@@ -599,30 +617,63 @@ def generate_cpu(ex, vnames, idx):
     cse=construct_cse(ex,vnames,idx)
     _v=cse[0]
     
-    cog.outl("// Dendro: {{{ ")
-    cog.outl("// Dendro: original ops: %d " %(cse[1]))
+    print("// Dendro: {{{ ")
+    print("// Dendro: original ops: %d " %(cse[1]))
 
     ee_name = 'DENDRO_' 
     ee_syms = numbered_symbols(prefix=ee_name)
     
-    custom_functions = {'grad': 'grad', 'grad2': 'grad2', 'agrad': 'agrad', 'kograd': 'kograd'}
+
     rops=0
-    cog.outl('// Dendro: printing temp variables')
+    print('// Dendro: printing temp variables')
     for (v1, v2) in _v[0]:
-        cog.out('double ')
-        cog.outl(change_deriv_names(ccode(v2, assign_to=v1, user_functions=custom_functions)))
+        print('const double ', end='')
+        print(change_deriv_names(ccode(v2, assign_to=v1, user_functions=custom_functions)))
         rops = rops + count_ops(v2)
 
-    cog.outl()
-    cog.outl('// Dendro: printing variables')
+    print()
+    print('// Dendro: printing variables')
     for i, e in enumerate(_v[1]):
-        cog.outl("//--")
-        cog.outl(change_deriv_names(ccode(e, assign_to=lname[i], user_functions=custom_functions)))
+        print("//--")
+        print(change_deriv_names(ccode(e, assign_to=lname[i], user_functions=custom_functions)))
         rops = rops + count_ops(e)
 
-    cog.outl('// Dendro: reduced ops: %d' %(rops))
-    cog.outl('// Dendro: }}} ')
+    print('// Dendro: reduced ops: %d' %(rops))
+    print('// Dendro: }}} ')
     
+
+def generate_cpu_no_cse(ex, vnames, idx):
+    """
+    Generate the C++ code by simplifying the expressions.
+    """
+    # print(ex)
+    custom_functions = {'grad': 'grad', 'grad2': 'grad2', 'agrad': 'agrad', 'kograd': 'kograd'}
+    mi = [0, 1, 2, 4, 5, 8]
+    midx = ['00', '01', '02', '11', '12', '22']
+    
+    # total number of expressions
+    # print("--------------------------------------------------------")
+    num_e = 0
+    lexp = []
+    lname = []
+    for i, e in enumerate(ex):
+        if type(e) == list:
+            num_e = num_e + len(e)
+            for j, ev in enumerate(e):
+                lexp.append(ev)
+                lname.append(vnames[i]+repr(j)+idx)
+        elif type(e) == Matrix:
+            num_e = num_e + len(e)
+            for j, k in enumerate(mi):
+                lexp.append(e[k])
+                lname.append(vnames[i]+midx[j]+idx)
+        else:
+            num_e = num_e + 1
+            lexp.append(e)
+            lname.append(vnames[i]+idx)
+
+    for i, e in enumerate(lexp):
+        print(change_deriv_names(ccode(expand(e), assign_to=lname[i], user_functions=custom_functions)))
 
 
 def generate_fpcore(ex, vnames, idx):
@@ -657,8 +708,8 @@ def generate_fpcore(ex, vnames, idx):
     cse=construct_cse(ex,vnames,idx)
     _v=cse[0]
     
-    #cog.outl("// Dendro: {{{ ")
-    #cog.outl("// Dendro: original ops: %d " %(cse[1]))
+    #print("// Dendro: {{{ ")
+    #print("// Dendro: original ops: %d " %(cse[1]))
 
     ee_name = 'DENDRO_' 
     ee_syms = numbered_symbols(prefix=ee_name)
@@ -674,7 +725,7 @@ def generate_fpcore(ex, vnames, idx):
 
     subs_functions={"Add(":"(+ ", "Integer(-1)": "-1 ", "Mul(":"(* ", "Div(":"(/ ", "Pow(":"(pow ","Rational(":"(/ "}
 
-    #cog.outl('// Dendro: printing temp variables')
+    #print('// Dendro: printing temp variables')
     tmp_vars=list()
     for (v1, v2) in _v[0]:
         tmp_vars.append(str(v1))
@@ -715,24 +766,24 @@ def generate_fpcore(ex, vnames, idx):
             float_sub["Float('%s'  prec=%s)"%(s[0],s[1])]=s[0]
 
         for key,val in sym_sub.items():
-            #cog.outl("{%s: %s} "%(key,val))
+            #print("{%s: %s} "%(key,val))
             srep=srep.replace(key,val)
 
         for key,val in int_sub.items():
-            #cog.outl("{%s: %s} "%(key,val))
+            #print("{%s: %s} "%(key,val))
             srep=srep.replace(key,val)
 
         for key,val in float_sub.items():
-            #cog.outl("{%s: %s} "%(key,val))
+            #print("{%s: %s} "%(key,val))
             srep=srep.replace(key,val)            
 
         for key, val in subs_functions.items():
             srep=srep.replace(key,val)
 
         
-        cog.outl("(FPCore (%s)" %(" ".join(inp_params)))
-        cog.outl("\t%s" %(srep))
-        cog.outl(")\n")
+        print("(FPCore (%s)" %(" ".join(inp_params)))
+        print("\t%s" %(srep))
+        print(")\n")
     
     #print(tmp_vars)
     tmp_vars.clear();
@@ -772,15 +823,15 @@ def generate_fpcore(ex, vnames, idx):
             float_sub["Float('%s'  prec=%s)"%(s[0],s[1])]=s[0]
 
         for key,val in sym_sub.items():
-            #cog.outl("{%s: %s} "%(key,val))
+            #print("{%s: %s} "%(key,val))
             srep=srep.replace(key,val)
 
         for key,val in int_sub.items():
-            #cog.outl("{%s: %s} "%(key,val))
+            #print("{%s: %s} "%(key,val))
             srep=srep.replace(key,val)
 
         for key,val in float_sub.items():
-            #cog.outl("{%s: %s} "%(key,val))
+            #print("{%s: %s} "%(key,val))
             srep=srep.replace(key,val)
 
         for key, val in subs_functions.items():
@@ -788,14 +839,12 @@ def generate_fpcore(ex, vnames, idx):
 
 
         tmp_vars=list(set(tmp_vars))
-        cog.outl("(FPCore (%s)" %(" ".join(tmp_vars)))
-        cog.outl("\t%s" %(srep))
-        cog.outl(")")
-        #cog.out("(")
-        #cog.out(str(e))
-        #cog.outl(")")
-        #cog.outl(")")
-        #cog.outl(change_deriv_names(ccode(e, assign_to=lname[i], user_functions=custom_functions)))
+        print("(FPCore (%s)" %(" ".join(tmp_vars)))
+        print("\t%s" %(srep))
+        print(")")
+        #print(")")
+        #print(")")
+        #print(change_deriv_names(ccode(e, assign_to=lname[i], user_functions=custom_functions)))
     
 
 
@@ -828,30 +877,30 @@ def generate_avx(ex, vnames, idx):
     cse=construct_cse(ex,vnames,idx)
     _v=cse[0]
     
-    cog.outl('// Dendro: {{{ ')
-    cog.outl("// Dendro: original ops: %d " %(cse[1]))
+    print('// Dendro: {{{ ')
+    print("// Dendro: original ops: %d " %(cse[1]))
 
     ee_name = 'DENDRO_' 
     ee_syms = numbered_symbols(prefix=ee_name)
     
-    cog.outl('// Dendro vectorized code: {{{')
+    print('// Dendro vectorized code: {{{')
     oper = {'mul': 'dmul', 'add': 'dadd', 'load': '*'}
     prevdefvars = set()
     for (v1, v2) in _v[0]:
         vv = numbered_symbols('v')
         vlist = []
         gen_vector_code(v2, vv, vlist, oper, prevdefvars, idx)
-        cog.outl('  double ' + repr(v1) + ' = ' + repr(vlist[0]) + ';')
+        print('  double ' + repr(v1) + ' = ' + repr(vlist[0]) + ';')
     for i, e in enumerate(_v[1]):
-        cog.outl("//--")
+        print("//--")
         vv = numbered_symbols('v')
         vlist = []
         gen_vector_code(e, vv, vlist, oper, prevdefvars, idx)
         #st = '  ' + repr(lname[i]) + '[idx] = ' + repr(vlist[0]) + ';'
         st = '  ' + repr(lname[i]) + " = " + repr(vlist[0]) + ';'
-        cog.outl(st.replace("'",""))
+        print(st.replace("'",""))
 
-    cog.outl('// Dendro vectorized code: }}} ')
+    print('// Dendro vectorized code: }}} ')
 
 
 
@@ -886,11 +935,29 @@ def change_deriv_names(str):
                 rep=rep+'_'+v.strip()
             #rep=rep+';'
             c_str=c_str.replace(s,rep)
+    
+    func_list=['pow']
+    for func in func_list:
+        key=func+'\(\w+, \d\)'
+        slist=regex.findall(key,c_str)
+        for s in slist:
+            #print(s)
+            w1=s.split('(')
+            w2=w1[1].split(')')[0].split(',')
+            #print(w1[0]+'_'+w2[0].strip()+'_'+w2[1].strip()+';')
+            if(int(w2[1].strip())==2):
+                rep = "("+w2[0].strip()+" * "+w2[0].strip()+")"
+                c_str=c_str.replace(s,rep)
+            # rep=w1[0]
+            # for v in w2:
+            #     rep=rep+'_'+v.strip()
+            # #rep=rep+';'
+            # c_str=c_str.replace(s,rep)
     return c_str
 
 
 
-def generate_separate(ex, vnames, idx):
+def generate_separate(ex, vnames, idx,prefix=""):
     """
     Generate the C++ code by simplifying the expressions.
     """
@@ -925,7 +992,7 @@ def generate_separate(ex, vnames, idx):
 
     # print(num_e)
     # print(len(lname))
-    c_file=open(vnames[0]+'.cpp','w')
+    c_file=open(prefix + vnames[0]+'.cpp','w')
     print('generating code for '+vnames[0])
     print('    bssn::timer::t_rhs.start();',file=c_file)
     print('for (unsigned int k = 3; k < nz-3; k++) { ',file=c_file)
@@ -1103,7 +1170,7 @@ def gen_vector_code(ex, vsym, vlist, oper, prevdefvars, idx):
             idxn = idxn.replace("]","")
             st += repr(tv) + ' = ' + o1s + '(' + repr(ex.func) + '_' + '_'.join(str_args) + '+' + idxn + ' );'
             # st += repr(tv) + ' = ' + repr(ex) + ';'
-            cog.outl(st.replace(idx,""))
+            print(st.replace(idx,""))
             return
 
     if isinstance(ex, Pow):
@@ -1121,7 +1188,7 @@ def gen_vector_code(ex, vsym, vlist, oper, prevdefvars, idx):
                 st += repr(tv) + ' = ' + repr(a1) + ' * ' + repr(a1) + ';'
             else:
                 st += repr(tv) + ' = pow( ' + repr(a1) + ', ' + repr(a2) + ');'
-            cog.outl(st)
+            print(st)
             return
 
     # recursively process the arguments of the function or operator
@@ -1141,13 +1208,13 @@ def gen_vector_code(ex, vsym, vlist, oper, prevdefvars, idx):
                 st += repr(tv) + ' = ' + repr(float(ex)) + ';'
             else:
                 st += repr(tv) + ' = ' + repr(ex) + ';'
-            cog.outl(st)
+            print(st)
     elif isinstance(ex, Symbol):
         tv = next(vsym)
         vlist.append(tv)
         st = vec_print_str(tv, prevdefvars)
         st += repr(tv) +  ' = ' + repr(ex) + ';'
-        cog.outl(st)
+        print(st)
     elif isinstance(ex, Mul):
         nargs = len(ex.args)
         #print('mul..',len(vlist))
@@ -1160,7 +1227,7 @@ def gen_vector_code(ex, vsym, vlist, oper, prevdefvars, idx):
             #st += repr(v1) + ' * ' + repr(v2) + ';'
             o1 = oper['mul']
             st += repr(o1) + '(' + repr(v1) + ', ' + repr(v2) + ');'
-            cog.outl(st.replace("'", ""))
+            print(st.replace("'", ""))
             vlist.append(tv)
     elif isinstance(ex, Add):
         nargs = len(ex.args)
@@ -1173,7 +1240,7 @@ def gen_vector_code(ex, vsym, vlist, oper, prevdefvars, idx):
             v2 = vlist.pop()
             o1 = oper['add']
             st += repr(o1) + '(' + repr(v1) + ', ' + repr(v2) + ');'
-            cog.outl(st.replace("'",""))
+            print(st.replace("'",""))
             vlist.append(tv)
     elif isinstance(ex, Pow):
         tv = next(vsym)
@@ -1192,19 +1259,19 @@ def gen_vector_code(ex, vsym, vlist, oper, prevdefvars, idx):
                 v1 = next(vsym)
                 st = vec_print_str(v1, prevdefvars)
                 st += repr(v1) + ' = ' + repr(o1) + '(' + repr(qman) + ', ' + repr(qman) + ');'
-                cog.outl(st.replace("'",""))
+                print(st.replace("'",""))
                 st = vec_print_str(tv, prevdefvars)
                 st += repr(tv) + ' = 1.0 / ' + repr(v1) + ';'
             elif (a2 > 2 and a2 < 8):
                 v1 = next(vsym)
                 st = vec_print_str(v1, prevdefvars)
                 st += repr(v1) + ' = ' + repr(o1) + '(' + repr(qman) + ', ' + repr(qman) + ');'
-                cog.outl(st.replace("'",""))
+                print(st.replace("'",""))
                 for i in range(a2-3):
                     v2 = next(vsym)
                     st = vec_print_str(v2, prevdefvars)
                     st += repr(v2) + ' = ' + repr(o1) + '(' + repr(v1) + ', ' + repr(qman) + ');'
-                    cog.outl(st.replace("'",""))
+                    print(st.replace("'",""))
                     v1 = v2
                 st = vec_print_str(tv, prevdefvars)
                 st += repr(tv) + ' = ' + repr(o1) + '(' + repr(v1) + ', ' + repr(qman) + ');'
@@ -1214,5 +1281,215 @@ def gen_vector_code(ex, vsym, vlist, oper, prevdefvars, idx):
         else:
             st = vec_print_str(tv, prevdefvars)
             st = repr(tv) + ' = pow(' + repr(qman) + ',' + repr(qexp) + ');'
-        cog.outl(st.replace("'",""))
+        print(st.replace("'",""))
         vlist.append(tv)
+
+
+def store_node(v, at_idx, local_mem):
+    for key,val in local_mem.items():
+        if val is None:
+            local_mem[key]=v
+            #print("storing node %s at %d"%(v,key))
+            break
+    
+    at_idx[v]=key
+
+def evict_node(v,at_idx,local_mem):
+    local_mem[at_idx[v]]=None
+    #print("release %s"%v)
+    at_idx[v]=-1
+
+def visit_node(G: nx.DiGraph, v, work_queue, local_mem, is_allocated):
+    at_eval    = nx.get_node_attributes(G,"eval")
+    at_func    = nx.get_node_attributes(G,"func") 
+    at_args    = nx.get_node_attributes(G,"args") 
+    at_idx     = nx.get_node_attributes(G, "idx")
+    at_eval[v] = True
+
+    descendents_list = list(G.successors(v))
+
+    if( at_func[v] != sympy.core.add.Add  and at_func[v]!=sympy.core.mul.Mul):
+        """
+        Direct evaluation for non-reduction type functions such as pow
+        """
+        #print(at_func[v],v)
+        if(at_func[v] == sympy.core.power.Pow):
+            a1=at_args[v][0]
+            a2=at_args[v][1]
+
+            # print(a1,a2)
+            # print("a1 is at DENDRO_%d\n"%at_idx[a1])
+            # print(type(a2))
+            
+            if(at_idx[a1]==-1):
+                assert False, "invalid traversal order"
+
+            if(type(a2) == sympy.core.numbers.Integer or type(a2) == sympy.core.numbers.One or type(a2) == sympy.core.numbers.NegativeOne):
+                if(at_idx[v]==-1):
+                    store_node(v,at_idx,local_mem)
+
+                if(is_allocated[at_idx[v]] == True):
+                    print("DENDRO_%d = DENDRO_%d;\n"%(at_idx[v],at_idx[a1])) 
+                else:
+                    print("double DENDRO_%d = DENDRO_%d;\n"%(at_idx[v],at_idx[a1])) 
+                    is_allocated[at_idx[v]]=True
+                
+                
+                for i in range(abs(int(a2))-1):
+                    print("DENDRO_%d *= DENDRO_%d;"%(at_idx[v],at_idx[a1])) 
+                    
+                if(int(a2)<0):
+                    print("DENDRO_%d = 1/DENDRO_%d;"%(at_idx[v],at_idx[v])) 
+
+
+            G.remove_edge(v,a1)
+            G.remove_edge(v,a2)
+
+            if(G.in_degree(a1)==0):
+                evict_node(a1,at_idx,local_mem)
+
+            if(G.in_degree(a2)==0):
+                evict_node(a2,at_idx,local_mem)
+
+        
+        else:
+            c_code = ccode(v)
+            if(at_idx[v]==-1):
+                store_node(v,at_idx,local_mem)
+                if(is_allocated[at_idx[v]] == True):
+                    print("DENDRO_%d = %s;"%(at_idx[v],c_code)) 
+                else:
+                    print("double DENDRO_%d = %s;"%(at_idx[v],c_code)) 
+                    is_allocated[at_idx[v]]=True
+    else:
+        for u in descendents_list:
+            if(at_eval[u] == True):
+                if(at_idx[v]==-1):
+                    store_node(v,at_idx,local_mem)
+                    #print("\n// initialize reduce for %s"%v)
+                    print("\n// initialize reduction for ")
+                    if(at_func[v] == sympy.core.add.Add):
+                        if(is_allocated[at_idx[v]] == True):
+                            print("DENDRO_%d = 0;\n"%(at_idx[v])) 
+                        else:
+                            print("double DENDRO_%d = 0;\n"%(at_idx[v])) 
+                            is_allocated[at_idx[v]]=True
+
+                    elif(at_func[v] == sympy.core.mul.Mul):
+                        if(is_allocated[at_idx[v]] == True):
+                            print("DENDRO_%d = 1;\n"%(at_idx[v])) 
+                        else:
+                            print("double DENDRO_%d = 1;\n"%(at_idx[v]))
+                            is_allocated[at_idx[v]]=True
+                    
+                if(at_func[v] == sympy.core.add.Add):
+                    print("DENDRO_%d += DENDRO_%d;"%(at_idx[v],at_idx[u])) 
+                elif(at_func[v] == sympy.core.mul.Mul):
+                    print("DENDRO_%d *= DENDRO_%d;"%(at_idx[v],at_idx[u])) 
+                
+                G.remove_edge(v,u)
+                if G.in_degree(u)==0:
+                    evict_node(u,at_idx,local_mem)
+
+                    
+            else:
+                work_queue.append(u)
+                at_eval[v]=False
+    
+    nx.set_node_attributes(G, at_eval, "eval")
+    nx.set_node_attributes(G, at_idx,  "idx")
+    return G,local_mem
+
+
+def generate_code_nx(ex, vnames, idx):
+    """
+    Generate the C++ code by simplifying the expressions.
+    """
+    # print(ex)
+    mi = [0, 1, 2, 4, 5, 8]
+    midx = ['00', '01', '02', '11', '12', '22']
+    
+    # total number of expressions
+    # print("--------------------------------------------------------")
+    num_e = 0
+    lexp = []
+    lname = []
+    for i, e in enumerate(ex):
+        if type(e) == list:
+            num_e = num_e + len(e)
+            for j, ev in enumerate(e):
+                lexp.append(ev)
+                lname.append(vnames[i]+repr(j)+idx)
+        elif type(e) == Matrix:
+            num_e = num_e + len(e)
+            for j, k in enumerate(mi):
+                lexp.append(e[k])
+                lname.append(vnames[i]+midx[j]+idx)
+        else:
+            num_e = num_e + 1
+            lexp.append(e)
+            lname.append(vnames[i]+idx)
+    
+
+
+    g=nxgraph.ExpressionGraph()
+    g.add_expressions(lexp,lname)
+    G=g.composed_graph(verbose=False)
+    # Gr=G.reverse()
+    # tgr = [g for g in nx.topological_generations(Gr)]
+
+    all_tsorts = [nx.topological_sort(G)]
+    
+    for i,ts in enumerate(all_tsorts):
+        Gp = nx.DiGraph(G)
+        at_eval       = nx.get_node_attributes(Gp,"eval")
+        at_idx        = dict()
+        local_mem     = dict()
+        is_allocated  = dict()
+        for node_id,v in enumerate(Gp.nodes):
+            at_idx[v]=-1
+            local_mem[node_id]=None
+            is_allocated[node_id]=False
+            # if Gp.out_degree(v) == 0:
+            #     at_eval[v]=True
+
+        nx.set_node_attributes(Gp,at_eval,"eval")
+        nx.set_node_attributes(Gp,at_idx, "idx")
+        W=list(ts)
+        #print("ts = %d"%(i))
+        while len(W)>0:
+            v = W.pop()
+            Gp, local_mem = visit_node(Gp, v, W, local_mem, is_allocated)
+            at_eval    = nx.get_node_attributes(Gp,"eval")
+            at_idx     = nx.get_node_attributes(Gp,"idx")
+            if(not at_eval[v]):
+                W.append(v)
+            else:
+                c_code  = ccode(v)
+                if(at_idx[v]==-1):
+                    store_node(v, at_idx, local_mem)
+                    if(is_allocated[at_idx[v]] == True):
+                        print("DENDRO_%d=%s;"%(at_idx[v],c_code))
+                    else:
+                        print("double DENDRO_%d=%s;"%(at_idx[v],c_code))
+                        is_allocated[at_idx[v]]=True
+                    
+                    #print("if ( fabs((DENDRO_%d) - (%s))>1e-6) {printf(\"reduction error %s at DENDRO_%d=%%.8E expected=%%.8E \\n\",DENDRO_%d,%s);}"%(at_idx[v],c_code,v,at_idx[v],at_idx[v],c_code))
+
+                else:
+                    #print("if ( fabs((DENDRO_%d) - (%s))>1e-6) {printf(\"reduction error %s at DENDRO_%d=%%.8E expected=%%.8E \\n\",DENDRO_%d,%s);}"%(at_idx[v],c_code,v,at_idx[v],at_idx[v],c_code))
+                    if v in lexp:
+                        print("%s=DENDRO_%d;"%(lname[lexp.index(v)],at_idx[v]))
+                        if(Gp.in_degree(v)==0):
+                            evict_node(v,at_idx,local_mem)
+                        
+                
+                
+                        
+
+            nx.set_node_attributes(Gp,at_eval,"eval")
+            nx.set_node_attributes(Gp,at_idx, "idx")
+        
+
+
+
